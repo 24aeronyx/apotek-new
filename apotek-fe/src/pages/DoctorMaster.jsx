@@ -154,7 +154,7 @@ export default function DoctorMaster() {
     <div className="space-y-6 font-sans relative">
       {/* TOAST POP-UP NOTIFIKASI */}
       {toast.show && (
-        <div className="fixed top-5 right-5 z-[100] animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="fixed top-5 right-5 z-100 animate-in fade-in slide-in-from-top-3 duration-200">
           <div
             className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-xs font-bold ${
               toast.type === "success"

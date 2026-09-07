@@ -129,7 +129,7 @@ export default function StockOpname() {
     <div className="space-y-6 font-sans relative">
       {/* TOAST POP-UP NOTIFIKASI */}
       {toast.show && (
-        <div className="fixed top-5 right-5 z-[100] animate-in fade-in slide-in-from-top-3 duration-200">
+        <div className="fixed top-5 right-5 z-100 animate-in fade-in slide-in-from-top-3 duration-200">
           <div
             className={`flex items-center gap-3 px-4 py-3 rounded-2xl shadow-xl border text-xs font-bold ${
               toast.type === "success"
@@ -261,10 +261,11 @@ export default function StockOpname() {
         </div>
       </div>
       {/* Tabel Utama Audit Stok */}
-      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden shadow-sm">
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
+      {/* Tabel Utama Audit Stok */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
-            <thead className="bg-slate-100 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider">
+            <thead className="bg-slate-100 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider whitespace-nowrap">
               <tr>
                 <th className="p-4">Obat / Produk</th>
                 <th className="p-4">No. Batch & ED</th>
@@ -276,7 +277,7 @@ export default function StockOpname() {
                 <th className="p-4 text-right">Aksi Audit</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200">
+            <tbody className="divide-y divide-slate-200 whitespace-nowrap">
               {loading ? (
                 <tr>
                   <td colSpan="8" className="p-8 text-center text-slate-400">
