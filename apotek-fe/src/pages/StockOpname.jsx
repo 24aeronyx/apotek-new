@@ -9,8 +9,10 @@ import {
   XCircle,
   ChevronLeft,
   ChevronRight,
+  FileDown,
 } from "lucide-react";
 import apiClient from "../api/axios";
+import branding from "../config/branding";
 
 export default function StockOpname() {
   const [auditList, setAuditList] = useState([]);
@@ -125,6 +127,16 @@ export default function StockOpname() {
   const completedCount = auditList.filter((i) => i.is_opnamed).length;
   const pendingCount = auditList.filter((i) => !i.is_opnamed).length;
 
+  const downloadPdf = async () => {
+    const response = await apiClient.get(`/stock-opnames/pdf?month=${selectedMonth}&search=${encodeURIComponent(search)}&status=${filterStatus}`, { responseType: "blob" });
+    const url = URL.createObjectURL(response.data);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `laporan-stok-opname-${selectedMonth}.pdf`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6 font-sans relative">
       {/* TOAST POP-UP NOTIFIKASI */}
@@ -154,7 +166,7 @@ export default function StockOpname() {
       )}
 
       {/* Header */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
             <ClipboardCheck className="w-7 h-7 text-emerald-600" /> Sistem Stok
@@ -176,7 +188,10 @@ export default function StockOpname() {
             className="text-xs font-bold text-slate-800 border-none outline-none bg-transparent cursor-pointer"
           />
         </div>
+        <button type="button" onClick={downloadPdf} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1"><FileDown className="w-4 h-4" /> PDF</button>
       </div>
+
+      <div className="hidden print:block border-b border-slate-300 pb-4"><h1 className="text-xl font-bold">{branding.name}</h1><p className="text-sm">Laporan Stok Opname</p><p className="text-xs text-slate-500">{branding.address} · Periode: {selectedMonth}</p></div>
 
       {/* Progress Cards (Statistik Keseluruhan Database) */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
@@ -274,7 +289,7 @@ export default function StockOpname() {
                 <th className="p-4">Selisih</th>
                 <th className="p-4">Status Opname</th>
                 <th className="p-4">Auditor / Waktu</th>
-                <th className="p-4 text-right">Aksi Audit</th>
+                <th className="p-4 text-right print:hidden">Aksi Audit</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200 whitespace-nowrap">
@@ -388,7 +403,7 @@ export default function StockOpname() {
                     </td>
 
                     {/* 8. Tombol Aksi */}
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-right print:hidden">
                       <button
                         onClick={() => handleOpenOpnameModal(item)}
                         className={`px-3 py-1.5 rounded-lg font-bold text-xs transition-colors ${

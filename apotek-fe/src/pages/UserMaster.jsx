@@ -19,7 +19,10 @@ import {
   XCircle,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  KeyRound,
+  Settings2,
+  Save,
 } from "lucide-react";
 import apiClient from "../api/axios";
 
@@ -30,6 +33,12 @@ export default function UserMaster() {
   const [roleFilter, setRoleFilter] = useState("");
   const [page, setPage] = useState(1);
   const [pagination, setPagination] = useState({});
+  const [accessOptions, setAccessOptions] = useState({ roles: [], permissions: [] });
+  const [roleModal, setRoleModal] = useState({ show: false, editing: null });
+  const [roleForm, setRoleForm] = useState({ name: "", permissions: [] });
+  const [accessModal, setAccessModal] = useState({ show: false, user: null });
+  const [accessForm, setAccessForm] = useState({ roles: [], permissions: [] });
+  const [accessLoading, setAccessLoading] = useState(false);
 
   // Modal Input / Edit State
   const [showModal, setShowModal] = useState(false);
@@ -102,6 +111,21 @@ export default function UserMaster() {
       icon: CreditCard,
     },
   ];
+
+  const PERMISSION_META = {
+    "manage-users": { menu: "Master User", action: "Kelola user & hak akses" },
+    "view-reports": { menu: "Laporan", action: "Lihat dan cetak laporan" },
+    "view-drugs": { menu: "Master Obat", action: "Lihat katalog obat" },
+    "manage-master-drugs": { menu: "Master Obat", action: "Kelola data obat" },
+    "view-stock": { menu: "Stok Opname", action: "Lihat informasi stok" },
+    "manage-stock-in": { menu: "Faktur Pembelian", action: "Kelola stok masuk" },
+    "create-rme": { menu: "Kunjungan", action: "Buat & perbarui RME" },
+    "view-rme": { menu: "Kunjungan", action: "Lihat RME" },
+    "process-pos-sale": { menu: "Kasir", action: "Proses transaksi penjualan" },
+  };
+
+  const getPermissionMeta = (name) =>
+    PERMISSION_META[name] || { menu: "Akses Sistem", action: name };
 
   // Fetch API dengan Handling Pembacaan Data Aman
   const fetchUsers = async () => {
@@ -206,6 +230,79 @@ export default function UserMaster() {
     }
   };
 
+  const fetchAccessOptions = async () => {
+    const res = await apiClient.get("/users/access-options");
+    setAccessOptions(res.data.data || { roles: [], permissions: [] });
+  };
+
+  const openRoleModal = async (role = null) => {
+    try {
+      await fetchAccessOptions();
+      setRoleModal({ show: true, editing: role });
+      setRoleForm({
+        name: role?.name || "",
+        permissions: role?.permissions?.map((permission) => permission.name) || [],
+      });
+    } catch (err) {
+      triggerToast("Gagal memuat konfigurasi role", "error");
+    }
+  };
+
+  const handleRoleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const url = roleModal.editing
+        ? `/users/roles/${roleModal.editing.id}`
+        : "/users/roles";
+      const method = roleModal.editing ? "put" : "post";
+      await apiClient[method](url, roleForm);
+      triggerToast("Role dan permission berhasil disimpan");
+      setRoleModal({ show: false, editing: null });
+      fetchAccessOptions();
+    } catch (err) {
+      triggerToast(err.response?.data?.message || "Gagal menyimpan role", "error");
+    }
+  };
+
+  const openAccessModal = async (user) => {
+    setAccessLoading(true);
+    try {
+      await fetchAccessOptions();
+      const detail = await apiClient.get(`/users/${user.id}`);
+      const selectedUser = detail.data.data || user;
+      setAccessModal({ show: true, user: selectedUser });
+      setAccessForm({
+        roles: selectedUser.roles?.map((role) => role.name) || [],
+        permissions: selectedUser.permissions?.map((permission) => permission.name) || [],
+      });
+    } catch (err) {
+      triggerToast("Gagal memuat hak akses pengguna", "error");
+    } finally {
+      setAccessLoading(false);
+    }
+  };
+
+  const handleAccessSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await apiClient.put(`/users/${accessModal.user.id}/access`, accessForm);
+      triggerToast("Hak akses pengguna berhasil diperbarui");
+      setAccessModal({ show: false, user: null });
+      fetchUsers();
+    } catch (err) {
+      triggerToast(err.response?.data?.message || "Gagal menyimpan hak akses", "error");
+    }
+  };
+
+  const togglePermission = (permission, field, setter) => {
+    setter((current) => ({
+      ...current,
+      [field]: current[field].includes(permission)
+        ? current[field].filter((item) => item !== permission)
+        : [...current[field], permission],
+    }));
+  };
+
   const getRoleBadge = (roleKey) => {
     if (!roleKey) {
       return (
@@ -280,12 +377,20 @@ export default function UserMaster() {
           </p>
         </div>
 
-        <button
-          onClick={() => handleOpenModal()}
-          className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
-        >
-          <UserPlus className="w-4 h-4" /> Tambah User Baru
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => openRoleModal()}
+            className="bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
+          >
+            <Settings2 className="w-4 h-4 text-emerald-600" /> Kelola Role
+          </button>
+          <button
+            onClick={() => handleOpenModal()}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
+          >
+            <UserPlus className="w-4 h-4" /> Tambah User Baru
+          </button>
+        </div>
       </div>
 
       {/* Filter Pencarian & Role */}
@@ -375,6 +480,13 @@ export default function UserMaster() {
                     </span>
                   </td>
                   <td className="p-4 text-right space-x-2">
+                    <button
+                      onClick={() => openAccessModal(u)}
+                      className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg"
+                      title="Atur Hak Akses"
+                    >
+                      <KeyRound className="w-4 h-4" />
+                    </button>
                     <button
                       onClick={() => handleOpenModal(u)}
                       className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg"
@@ -572,6 +684,75 @@ export default function UserMaster() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL ROLE & PERMISSION */}
+      {roleModal.show && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-100 font-sans">
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl"><Settings2 className="w-6 h-6" /></div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-800">Role & Permission</h3>
+                  <p className="text-xs text-slate-400">Atur kemampuan yang diwariskan ke banyak pengguna</p>
+                </div>
+              </div>
+              <button type="button" onClick={() => setRoleModal({ show: false, editing: null })} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"><X className="w-5 h-5" /></button>
+            </div>
+
+            <div className="grid lg:grid-cols-[220px_1fr] gap-5 pt-5">
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Daftar Role</p>
+                {accessOptions.roles.map((role) => (
+                  <div key={role.id} className={`flex items-center justify-between p-2.5 rounded-xl border ${roleModal.editing?.id === role.id ? "border-emerald-400 bg-emerald-50" : "border-slate-200"}`}>
+                    <button type="button" onClick={() => openRoleModal(role)} className="text-left min-w-0">
+                      <p className="font-bold text-xs text-slate-800 truncate">{role.name}</p>
+                      <p className="text-[10px] text-slate-400">{role.permissions?.length || 0} permission</p>
+                    </button>
+                    {!['admin', 'super admin'].includes(role.name.toLowerCase()) && (
+                      <button type="button" onClick={async () => { try { await apiClient.delete(`/users/roles/${role.id}`); triggerToast("Role berhasil dihapus"); fetchAccessOptions(); } catch (err) { triggerToast(err.response?.data?.message || "Gagal menghapus role", "error"); } }} className="p-1 text-red-400 hover:bg-red-50 rounded-lg" title="Hapus role"><Trash2 className="w-3.5 h-3.5" /></button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => openRoleModal()} className="w-full p-2.5 rounded-xl border border-dashed border-emerald-300 text-emerald-700 text-xs font-bold hover:bg-emerald-50">+ Role Baru</button>
+              </div>
+
+              <form onSubmit={handleRoleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1.5">Nama Role *</label>
+                  <input required value={roleForm.name} onChange={(e) => setRoleForm({ ...roleForm, name: e.target.value })} placeholder="Contoh: Front Office" className="w-full p-2.5 border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <div className="flex justify-between items-center mb-2"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Akses Menu Role</p><span className="text-[10px] text-slate-400">{roleForm.permissions.length} dipilih</span></div>
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    {accessOptions.permissions.map((permission) => (
+                      <label key={permission.id} className="flex items-center gap-2 p-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer">
+                        <input type="checkbox" checked={roleForm.permissions.includes(permission.name)} onChange={() => togglePermission(permission.name, "permissions", setRoleForm)} className="accent-emerald-600" />
+                        <span className="min-w-0"><span className="block text-xs font-bold text-slate-700 truncate">{getPermissionMeta(permission.name).menu}</span><span className="block text-[10px] text-slate-400 truncate">{getPermissionMeta(permission.name).action}</span></span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2 pt-4 border-t border-slate-100"><button type="button" onClick={() => setRoleModal({ show: false, editing: null })} className="px-4 py-2.5 border border-slate-200 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-50">Batal</button><button type="submit" className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2"><Save className="w-4 h-4" /> Simpan Role</button></div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL AKSES PER USER */}
+      {accessModal.show && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 shadow-2xl border border-slate-100 font-sans">
+            <div className="flex justify-between items-start pb-4 border-b border-slate-100"><div className="flex items-center gap-3"><div className="p-3 bg-emerald-100 text-emerald-700 rounded-2xl"><KeyRound className="w-6 h-6" /></div><div><h3 className="text-base font-bold text-slate-800">Akses Akun</h3><p className="text-xs text-slate-400">{accessModal.user?.name} · role dan permission khusus akun</p></div></div><button type="button" onClick={() => setAccessModal({ show: false, user: null })} className="text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100"><X className="w-5 h-5" /></button></div>
+            {accessLoading ? <p className="py-10 text-center text-xs text-slate-400">Memuat hak akses...</p> : <form onSubmit={handleAccessSubmit} className="space-y-5 pt-5">
+              <div><div className="flex justify-between items-center mb-2"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Role Pengguna</p><span className="text-[10px] text-slate-400">{accessForm.roles.length} dipilih</span></div><div className="grid sm:grid-cols-2 gap-2">{accessOptions.roles.map((role) => <label key={role.id} className="flex items-center gap-2 p-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"><input type="checkbox" checked={accessForm.roles.includes(role.name)} onChange={() => togglePermission(role.name, "roles", setAccessForm)} className="accent-emerald-600" /><span className="text-xs font-medium text-slate-700">{role.name}</span></label>)}</div></div>
+              <div><div className="flex justify-between items-center mb-2"><p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Custom Akses Menu</p><span className="text-[10px] text-slate-400">Override langsung user</span></div><div className="grid sm:grid-cols-2 gap-2">{accessOptions.permissions.map((permission) => <label key={permission.id} className="flex items-center gap-2 p-2.5 border border-slate-200 rounded-xl hover:bg-slate-50 cursor-pointer"><input type="checkbox" checked={accessForm.permissions.includes(permission.name)} onChange={() => togglePermission(permission.name, "permissions", setAccessForm)} className="accent-emerald-600" /><span className="min-w-0"><span className="block text-xs font-bold text-slate-700 truncate">{getPermissionMeta(permission.name).menu}</span><span className="block text-[10px] text-slate-400 truncate">{getPermissionMeta(permission.name).action}</span></span></label>)}</div></div>
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-100"><button type="button" onClick={() => setAccessModal({ show: false, user: null })} className="px-4 py-2.5 border border-slate-200 rounded-xl font-bold text-xs text-slate-600 hover:bg-slate-50">Batal</button><button type="submit" className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2"><Save className="w-4 h-4" /> Simpan Akses</button></div>
+            </form>}
           </div>
         </div>
       )}

@@ -1,1 +1,15 @@
 @import "tailwindcss";
+
+@media print {
+	.overflow-auto,
+	.overflow-y-auto,
+	.overflow-x-auto {
+		overflow: visible !important;
+	}
+
+	.shadow-sm,
+	.shadow-xl,
+	.shadow-2xl {
+		box-shadow: none !important;
+	}
+}

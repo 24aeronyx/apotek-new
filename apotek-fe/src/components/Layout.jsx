@@ -18,12 +18,19 @@ import {
   Truck,
 } from "lucide-react";
 import apiClient from "../api/axios";
+import branding from "../config/branding";
 
 export default function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+  const permissions = user.permissions || [];
+  const roles = (user.roles || []).map((role) => String(role).toLowerCase());
+  const hasAllAccess = roles.includes("admin") || roles.includes("super admin");
+
+  const canAccess = (permission) =>
+    hasAllAccess || !permission || permissions.includes(permission);
 
   const handleLogout = async () => {
     try {
@@ -47,26 +54,28 @@ export default function Layout() {
     {
       groupLabel: "PELAYANAN & RME",
       items: [
-        { label: "Pasien", path: "/patients", icon: Users },
-        { label: "RME Pasien", path: "/rme", icon: Stethoscope },
-        { label: "Kasir / POS", path: "/pos", icon: ShoppingCart },
-        { label: "Riwayat Penjualan", path: "/sales-history", icon: ShoppingBag },
+        { label: "Kunjungan", path: "/rme", icon: Stethoscope, permission: "view-rme" },
+        { label: "Kasir", path: "/pos", icon: ShoppingCart, permission: "process-pos-sale" },
+        { label: "Riwayat Penjualan", path: "/sales-history", icon: ShoppingBag, permission: "process-pos-sale" },
+        { label: "Laporan", path: "/reports", icon: FileText, permission: "view-reports" },
       ],
     },
     {
       groupLabel: "INVENTARIS & FARMASI",
       items: [
-        { label: "Master Obat (FEFO)", path: "/drugs", icon: Pill },
-        { label: "Master Supplier (PBF)", path: "/suppliers", icon: Truck },
-        { label: "Faktur Pembelian", path: "/purchases", icon: FileText },
-        { label: "Stok Opname", path: "/stock-opname", icon: ClipboardCheck },
+        { label: "Master Obat", path: "/drugs", icon: Pill, permission: "view-drugs" },
+        { label: "Master Supplier", path: "/suppliers", icon: Truck, permission: "manage-stock-in" },
+        { label: "Faktur Pembelian", path: "/purchases", icon: FileText, permission: "manage-stock-in" },
+        { label: "Stok Opname", path: "/stock-opname", icon: ClipboardCheck, permission: "view-stock" },
+        { label: "Kartu Stok", path: "/stock-card", icon: ClipboardCheck, permission: "view-stock" },
       ],
     },
     {
       groupLabel: "MANAJEMEN SISTEM",
       items: [
-        { label: "Master Dokter", path: "/doctors", icon: UserCheck },
-        { label: "Master User", path: "/users", icon: Shield },
+        { label: "Master Pasien", path: "/patients", icon: Users, permission: "view-patients" },
+        { label: "Master Dokter", path: "/doctors", icon: UserCheck, permission: "view-doctors" },
+        { label: "Master User", path: "/users", icon: Shield, permission: "manage-users" },
       ],
     },
   ];
@@ -75,7 +84,7 @@ export default function Layout() {
     <div className="min-h-screen bg-slate-100 flex font-sans">
       {/* SIDEBAR MODERN */}
       <aside
-        className={`bg-slate-900 text-slate-300 flex flex-col justify-between transition-all duration-300 ease-in-out relative border-r border-slate-800 ${
+        className={`print:hidden bg-slate-900 text-slate-300 flex flex-col justify-between transition-all duration-300 ease-in-out relative border-r border-slate-800 ${
           collapsed ? "w-20 p-3" : "w-64 p-4"
         }`}
       >
@@ -91,29 +100,31 @@ export default function Layout() {
         {/* Brand Logo & Header */}
         <div>
           <div className={`flex items-center gap-3 py-3 border-b border-slate-800/80 mb-4 ${collapsed ? "justify-center" : "px-2"}`}>
-            <div className="bg-gradient-to-tr from-emerald-600 to-teal-400 p-2 rounded-xl text-white shadow-lg shadow-emerald-900/30 shrink-0">
+            <div className="bg-linear-to-tr from-emerald-600 to-teal-400 p-2 rounded-xl text-white shadow-lg shadow-emerald-900/30 shrink-0">
               <Activity className="w-6 h-6" />
             </div>
             {!collapsed && (
               <div className="truncate">
-                <h2 className="font-extrabold text-white text-base tracking-tight leading-tight">
-                  Klinik <span className="text-emerald-400">RME</span>
-                </h2>
-                <span className="text-[10px] text-slate-400 font-mono tracking-wider uppercase">PostgreSQL + FEFO</span>
+                <h2 className="font-extrabold text-white text-base tracking-tight leading-tight">{branding.name}</h2>
+                <span className="text-[10px] text-slate-400 font-mono tracking-wider uppercase">{branding.tagline}</span>
               </div>
             )}
           </div>
 
           {/* Grouped Menu List */}
           <div className="space-y-4 overflow-y-auto max-h-[calc(100vh-170px)] pr-1 custom-scrollbar">
-            {navGroups.map((group, idx) => (
+            {navGroups.map((group, idx) => {
+              const visibleItems = group.items.filter((item) => canAccess(item.permission));
+              if (visibleItems.length === 0) return null;
+
+              return (
               <div key={idx} className="space-y-1">
                 {!collapsed && (
                   <p className="px-3 text-[10px] font-bold text-slate-500 uppercase tracking-widest font-mono">
                     {group.groupLabel}
                   </p>
                 )}
-                {group.items.map((item) => {
+                {visibleItems.map((item) => {
                   const Icon = item.icon;
                   const isActive = location.pathname === item.path;
 
@@ -134,7 +145,8 @@ export default function Layout() {
                   );
                 })}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
 
@@ -165,7 +177,7 @@ export default function Layout() {
       </aside>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 p-8 overflow-y-auto max-h-screen">
+      <main className="flex-1 p-8 overflow-y-auto max-h-screen print:max-h-none print:overflow-visible print:p-0">
         <Outlet />
       </main>
     </div>

@@ -11,13 +11,16 @@ import {
   ChevronLeft,
   ChevronRight,
   RefreshCw,
+  Clock,
 } from "lucide-react";
 import apiClient from "../api/axios";
+import branding from "../config/branding";
 
 export default function SalesHistory() {
   const [sales, setSales] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL"); // State filter status
 
   // Pagination States
   const [page, setPage] = useState(1);
@@ -78,10 +81,19 @@ export default function SalesHistory() {
     }
   };
 
-  // Client-Side Filter Fallback jika backend mengembalikan array biasa
-  const filteredSales = sales.filter((s) =>
-    s.invoice_number?.toLowerCase().includes(search.toLowerCase())
-  );
+  // Client-Side Filter Fallback (Termasuk Filter Status)
+  const filteredSales = sales.filter((s) => {
+    const matchSearch = s.invoice_number
+      ?.toLowerCase()
+      .includes(search.toLowerCase());
+    
+    // Asumsi properti status bisa berupa s.status atau s.payment_status
+    const currentStatus = (s.payment_status || s.status || "PAID").toUpperCase();
+    const matchStatus =
+      statusFilter === "ALL" ? true : currentStatus === statusFilter;
+
+    return matchSearch && matchStatus;
+  });
 
   const isServerPaginated = Boolean(pagination.total);
   const totalItems = isServerPaginated ? pagination.total : filteredSales.length;
@@ -103,6 +115,41 @@ export default function SalesHistory() {
     ? pagination.to || 0
     : Math.min(page * perPage, filteredSales.length);
 
+  // Helper Render Badge Status
+  const renderStatusBadge = (sale) => {
+    const status = (sale.payment_status || sale.status || "PAID").toUpperCase();
+
+    switch (status) {
+      case "RETURNED":
+      case "CANCELLED":
+        return (
+          <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1">
+            <X className="w-3 h-3" /> DIRETUR
+          </span>
+        );
+      case "UNPAID":
+      case "PENDING":
+        return (
+          <span className="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1">
+            <Clock className="w-3 h-3" /> UNPAID
+          </span>
+        );
+      case "PARTIAL":
+        return (
+          <span className="bg-blue-100 text-blue-800 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1">
+            <AlertCircle className="w-3 h-3" /> SEBAGIAN
+          </span>
+        );
+      case "PAID":
+      default:
+        return (
+          <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1">
+            <CheckCircle2 className="w-3 h-3" /> PAID
+          </span>
+        );
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div>
@@ -110,13 +157,13 @@ export default function SalesHistory() {
           Audit & Riwayat Penjualan Kasir
         </h1>
         <p className="text-sm text-slate-500">
-          Cetak ulang struk transaksi dan proses retur obat konsumen
+          Cetak ulang struk transaksi, pantau tagihan unpaid, dan proses retur obat konsumen
         </p>
       </div>
 
-      {/* Bar Pencarian & Refresh */}
-      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center gap-4">
-        <div className="relative flex-1">
+      {/* Bar Pencarian, Filter Status & Refresh */}
+      <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col sm:flex-row items-center gap-3">
+        <div className="relative flex-1 w-full">
           <Search className="w-5 h-5 text-slate-400 absolute left-3 top-2.5" />
           <input
             type="text"
@@ -129,9 +176,22 @@ export default function SalesHistory() {
             className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
           />
         </div>
+
+        {/* Dropdown Filter Status */}
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="w-full sm:w-auto px-3 py-2 border border-slate-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-emerald-500 outline-none font-medium text-slate-700"
+        >
+          <option value="ALL">Semua Status</option>
+          <option value="PAID">PAID (Lunas)</option>
+          <option value="UNPAID">UNPAID (Belum Bayar)</option>
+          <option value="RETURNED">DIRETUR</option>
+        </select>
+
         <button
           onClick={fetchSales}
-          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+          className="p-2 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors shrink-0"
           title="Refresh Data"
         >
           <RefreshCw className="w-5 h-5" />
@@ -147,7 +207,7 @@ export default function SalesHistory() {
               <th className="p-4">Waktu Transaksi</th>
               <th className="p-4">Metode Bayar</th>
               <th className="p-4">Total Akhir</th>
-              <th className="p-4">Status</th>
+              <th className="p-4">Status Bayar</th>
               <th className="p-4 text-right">Aksi Audit</th>
             </tr>
           </thead>
@@ -165,52 +225,48 @@ export default function SalesHistory() {
                 </td>
               </tr>
             ) : (
-              displaySales.map((sale) => (
-                <tr key={sale.id} className="hover:bg-slate-50">
-                  <td className="p-4 font-mono font-bold text-slate-800">
-                    {sale.invoice_number}
-                  </td>
-                  <td className="p-4 text-xs text-slate-500">
-                    {new Date(sale.created_at).toLocaleString("id-ID")}
-                  </td>
-                  <td className="p-4 font-semibold text-slate-700">
-                    {sale.payment_method}
-                  </td>
-                  <td className="p-4 font-bold text-emerald-600">
-                    Rp {Number(sale.final_amount).toLocaleString("id-ID")}
-                  </td>
-                  <td className="p-4">
-                    {sale.status === "RETURNED" ? (
-                      <span className="bg-red-100 text-red-700 px-2.5 py-1 rounded-full text-xs font-bold">
-                        DIRETUR
-                      </span>
-                    ) : (
-                      <span className="bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full text-xs font-bold">
-                        PAID
-                      </span>
-                    )}
-                  </td>
-                  <td className="p-4 text-right space-x-2">
-                    <button
-                      onClick={() => setSelectedSale(sale)}
-                      className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium inline-flex items-center gap-1 transition-colors"
-                    >
-                      <Eye className="w-4 h-4" /> Detail / Cetak
-                    </button>
-                    {sale.status !== "RETURNED" && (
+              displaySales.map((sale) => {
+                const isReturned = sale.status === "RETURNED" || sale.payment_status === "RETURNED";
+                
+                return (
+                  <tr key={sale.id} className="hover:bg-slate-50">
+                    <td className="p-4 font-mono font-bold text-slate-800">
+                      {sale.invoice_number}
+                    </td>
+                    <td className="p-4 text-xs text-slate-500">
+                      {new Date(sale.created_at).toLocaleString("id-ID")}
+                    </td>
+                    <td className="p-4 font-semibold text-slate-700">
+                      {sale.payment_method || "-"}
+                    </td>
+                    <td className="p-4 font-bold text-emerald-600">
+                      Rp {Number(sale.final_amount).toLocaleString("id-ID")}
+                    </td>
+                    <td className="p-4">
+                      {renderStatusBadge(sale)}
+                    </td>
+                    <td className="p-4 text-right space-x-2">
                       <button
-                        onClick={() => {
-                          setSelectedSale(sale);
-                          setShowReturnModal(true);
-                        }}
-                        className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-colors"
+                        onClick={() => setSelectedSale(sale)}
+                        className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-medium inline-flex items-center gap-1 transition-colors"
                       >
-                        <RotateCcw className="w-4 h-4" /> Retur
+                        <Eye className="w-4 h-4" /> Detail / Cetak
                       </button>
-                    )}
-                  </td>
-                </tr>
-              ))
+                      {!isReturned && (
+                        <button
+                          onClick={() => {
+                            setSelectedSale(sale);
+                            setShowReturnModal(true);
+                          }}
+                          className="p-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-xs font-bold inline-flex items-center gap-1 transition-colors"
+                        >
+                          <RotateCcw className="w-4 h-4" /> Retur
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -252,13 +308,13 @@ export default function SalesHistory() {
             {/* Header Struk */}
             <div className="text-center space-y-1 pb-3 border-b border-dashed border-slate-300">
               <h3 className="font-bold text-slate-900 text-base font-sans tracking-wide">
-                APOTEK SEHAT BERSAMA
+                {branding.name}
               </h3>
               <p className="text-[10px] text-slate-500 font-sans">
-                SIPA: 446/001/SIPA/2026
+                {branding.license}
               </p>
               <p className="text-[10px] text-slate-500 font-sans">
-                Jl. Kesehatan No. 123, Kota
+                {branding.address}
               </p>
               <div className="pt-2 text-[10px] text-slate-600 text-left space-y-0.5 font-mono">
                 <p className="flex justify-between">
@@ -330,9 +386,15 @@ export default function SalesHistory() {
 
               <div className="pt-2 space-y-0.5 text-slate-600 text-[11px]">
                 <div className="flex justify-between">
+                  <span>Status Tagihan:</span>
+                  <span className="font-bold uppercase text-slate-800">
+                    {selectedSale.payment_status || selectedSale.status || "PAID"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
                   <span>Metode Bayar:</span>
                   <span className="font-bold">
-                    {selectedSale.payment_method}
+                    {selectedSale.payment_method || "-"}
                   </span>
                 </div>
                 {selectedSale.payment_method === "CASH" && (
@@ -363,7 +425,7 @@ export default function SalesHistory() {
             {/* Footer Struk */}
             <div className="pt-3 text-center text-[10px] text-slate-400 space-y-1 font-sans">
               <p className="font-semibold text-slate-600">
-                -- Terima Kasih & Semoga Lekas Sembuh --
+                -- {branding.receiptFooter} --
               </p>
               <p>Obat yang sudah dibeli tidak dapat dikembalikan</p>
             </div>
